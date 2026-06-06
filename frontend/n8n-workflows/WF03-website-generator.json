@@ -1,0 +1,95 @@
+{
+  "name": "WF-03: Website Generator",
+  "nodes": [
+    {
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-website",
+        "responseMode": "responseNode"
+      }
+    },
+    {
+      "name": "Get Template",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [450, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{$vars.SUPABASE_URL}}/rest/v1/templates?id=eq.{{$json.body.template_id}}&select=*",
+        "headers": {
+          "apikey": "={{$vars.SUPABASE_SERVICE_ROLE_KEY}}",
+          "Authorization": "Bearer {{$vars.SUPABASE_SERVICE_ROLE_KEY}}"
+        }
+      }
+    },
+    {
+      "name": "Generate SEO Content",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [650, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={{$vars.GOOGLE_API_KEY}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": []
+        },
+        "jsonBody": "{\n  \"contents\": [{\"parts\": [{\"text\": \"Generate SEO-optimized website content for a local business. Business: {{$('Webhook Trigger').item.json.body.business_details.name}}. Category: {{$('Webhook Trigger').item.json.body.business_details.category}}. Location: {{$('Webhook Trigger').item.json.body.business_details.address}}. Services: {{$('Webhook Trigger').item.json.body.business_details.services}}. Generate JSON with: title, meta_description, hero_heading, hero_subheading, about_text, service_descriptions (array of objects with name and description), cta_text, footer_text. All optimized for local SEO in India.\"}]}],\n  \"generationConfig\": {\"temperature\": 0.7, \"responseMimeType\": \"application/json\"}\n}",
+        "options": {}
+      }
+    },
+    {
+      "name": "Build Website HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300],
+      "parameters": {
+        "jsCode": "const business = $('Webhook Trigger').first().json.body.business_details;\nlet seoContent;\ntry {\n  const text = $input.first().json.candidates[0].content.parts[0].text;\n  seoContent = JSON.parse(text);\n} catch (e) {\n  seoContent = { title: business.name, meta_description: '', hero_heading: business.name, hero_subheading: 'Welcome', about_text: '', service_descriptions: [], cta_text: 'Contact Us', footer_text: '' };\n}\n\nconst html = `<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0\"><title>${seoContent.title}</title><meta name=\"description\" content=\"${seoContent.meta_description}\"><script src=\"https://cdn.tailwindcss.com\"></script><link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap\" rel=\"stylesheet\"></head><body class=\"font-['Inter'] bg-white text-gray-900\"><nav class=\"bg-white shadow-sm sticky top-0 z-50\"><div class=\"max-w-6xl mx-auto px-4 py-4 flex justify-between items-center\"><h1 class=\"text-xl font-bold\">${business.name}</h1><a href=\"tel:${business.phone || ''}\" class=\"bg-blue-600 text-white px-4 py-2 rounded-lg text-sm\">Call Now</a></div></nav><section class=\"bg-gradient-to-br from-blue-600 to-blue-800 text-white py-20 px-4\"><div class=\"max-w-4xl mx-auto text-center\"><h2 class=\"text-4xl md:text-5xl font-bold mb-4\">${seoContent.hero_heading}</h2><p class=\"text-lg opacity-90 mb-8\">${seoContent.hero_subheading}</p><a href=\"tel:${business.phone || ''}\" class=\"bg-white text-blue-600 px-8 py-3 rounded-lg font-semibold text-lg\">${seoContent.cta_text}</a></div></section><section class=\"py-16 px-4\"><div class=\"max-w-4xl mx-auto\"><h3 class=\"text-3xl font-bold mb-6\">About Us</h3><p class=\"text-gray-600 text-lg leading-relaxed\">${seoContent.about_text}</p></div></section><footer class=\"bg-gray-900 text-gray-400 py-8 px-4 text-center\"><p>${seoContent.footer_text}</p><p class=\"text-xs mt-2\">Made with Seriousprenuer</p></footer></body></html>`;\n\nreturn [{ json: { html, seoContent, business } }];"
+      }
+    },
+    {
+      "name": "Save to Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1050, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{$vars.SUPABASE_URL}}/rest/v1/websites",
+        "headers": {
+          "apikey": "={{$vars.SUPABASE_SERVICE_ROLE_KEY}}",
+          "Authorization": "Bearer {{$vars.SUPABASE_SERVICE_ROLE_KEY}}",
+          "Content-Type": "application/json",
+          "Prefer": "return=representation"
+        },
+        "body": "={\n  \"lead_id\": \"{{$('Webhook Trigger').item.json.body.lead_id}}\",\n  \"user_id\": \"{{$('Webhook Trigger').item.json.body.user_id}}\",\n  \"template_id\": \"{{$('Webhook Trigger').item.json.body.template_id}}\",\n  \"business_name\": \"{{$('Webhook Trigger').item.json.body.business_details.name}}\",\n  \"status\": \"draft\"\n}"
+      }
+    },
+    {
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1250, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"status\": \"draft\",\n  \"message\": \"Website generated successfully\"\n}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": { "main": [[ { "node": "Get Template" } ]] },
+    "Get Template": { "main": [[ { "node": "Generate SEO Content" } ]] },
+    "Generate SEO Content": { "main": [[ { "node": "Build Website HTML" } ]] },
+    "Build Website HTML": { "main": [[ { "node": "Save to Supabase" } ]] },
+    "Save to Supabase": { "main": [[ { "node": "Respond to Webhook" } ]] }
+  }
+}

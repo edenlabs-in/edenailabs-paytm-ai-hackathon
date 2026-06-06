@@ -1,0 +1,16 @@
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.mypy_cache
+tests
+.env
+.env.*
+graphify-out
+models_cache
+*.joblib
+.graphify_python
+*.log
+Dockerfile
+.dockerignore

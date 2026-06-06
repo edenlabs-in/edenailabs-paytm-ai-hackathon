@@ -1,0 +1,90 @@
+{
+  "name": "WF-08: Call Log Manager",
+  "nodes": [
+    {
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "log-call",
+        "responseMode": "responseNode"
+      }
+    },
+    {
+      "name": "Insert Call Log",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [450, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{$vars.SUPABASE_URL}}/rest/v1/call_logs",
+        "headers": {
+          "apikey": "={{$vars.SUPABASE_SERVICE_ROLE_KEY}}",
+          "Authorization": "Bearer {{$vars.SUPABASE_SERVICE_ROLE_KEY}}",
+          "Content-Type": "application/json"
+        },
+        "body": "={\n  \"lead_id\": \"{{$json.body.lead_id}}\",\n  \"user_id\": \"{{$json.body.user_id}}\",\n  \"script_id\": {{$json.body.script_id ? '\"' + $json.body.script_id + '\"' : 'null'}},\n  \"outcome\": \"{{$json.body.outcome}}\",\n  \"duration_seconds\": {{$json.body.duration_seconds || 0}},\n  \"notes\": {{JSON.stringify($json.body.notes || '')}}\n}"
+      }
+    },
+    {
+      "name": "Map Outcome to Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300],
+      "parameters": {
+        "jsCode": "const outcome = $('Webhook Trigger').first().json.body.outcome;\nconst statusMap = {\n  'answered': 'contacted',\n  'interested': 'interested',\n  'callback': 'contacted',\n  'not_interested': 'lost',\n  'voicemail': 'contacted',\n  'no_answer': 'new',\n  'wrong_number': 'lost'\n};\nconst newStatus = statusMap[outcome] || 'contacted';\nreturn [{ json: { newStatus, outcome } }];"
+      }
+    },
+    {
+      "name": "Update Lead Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [850, 300],
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$vars.SUPABASE_URL}}/rest/v1/leads?id=eq.{{$('Webhook Trigger').item.json.body.lead_id}}",
+        "headers": {
+          "apikey": "={{$vars.SUPABASE_SERVICE_ROLE_KEY}}",
+          "Authorization": "Bearer {{$vars.SUPABASE_SERVICE_ROLE_KEY}}",
+          "Content-Type": "application/json"
+        },
+        "body": "={\n  \"status\": \"{{$json.newStatus}}\"\n}"
+      }
+    },
+    {
+      "name": "Log Activity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1050, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{$vars.SUPABASE_URL}}/rest/v1/activities",
+        "headers": {
+          "apikey": "={{$vars.SUPABASE_SERVICE_ROLE_KEY}}",
+          "Authorization": "Bearer {{$vars.SUPABASE_SERVICE_ROLE_KEY}}",
+          "Content-Type": "application/json"
+        },
+        "body": "={\n  \"lead_id\": \"{{$('Webhook Trigger').item.json.body.lead_id}}\",\n  \"user_id\": \"{{$('Webhook Trigger').item.json.body.user_id}}\",\n  \"action\": \"call_made\",\n  \"details\": \"Call outcome: {{$('Webhook Trigger').item.json.body.outcome}}\"\n}"
+      }
+    },
+    {
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1250, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"lead_status_updated\": \"{{$('Map Outcome to Status').item.json.newStatus}}\",\n  \"call_logged\": true\n}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": { "main": [[ { "node": "Insert Call Log" } ]] },
+    "Insert Call Log": { "main": [[ { "node": "Map Outcome to Status" } ]] },
+    "Map Outcome to Status": { "main": [[ { "node": "Update Lead Status" } ]] },
+    "Update Lead Status": { "main": [[ { "node": "Log Activity" } ]] },
+    "Log Activity": { "main": [[ { "node": "Respond to Webhook" } ]] }
+  }
+}

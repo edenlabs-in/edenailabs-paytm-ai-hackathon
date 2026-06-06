@@ -1,0 +1,64 @@
+{
+  "name": "WF-04: Pipeline Manager",
+  "nodes": [
+    {
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "update-pipeline",
+        "responseMode": "responseNode"
+      }
+    },
+    {
+      "name": "Update Lead Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [450, 300],
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$vars.SUPABASE_URL}}/rest/v1/leads?id=eq.{{$json.body.lead_id}}",
+        "headers": {
+          "apikey": "={{$vars.SUPABASE_SERVICE_ROLE_KEY}}",
+          "Authorization": "Bearer {{$vars.SUPABASE_SERVICE_ROLE_KEY}}",
+          "Content-Type": "application/json",
+          "Prefer": "return=representation"
+        },
+        "body": "={\n  \"status\": \"{{$('Webhook Trigger').item.json.body.new_stage}}\",\n  \"notes\": \"{{$('Webhook Trigger').item.json.body.notes || ''}}\"\n}"
+      }
+    },
+    {
+      "name": "Log Activity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [650, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{$vars.SUPABASE_URL}}/rest/v1/activities",
+        "headers": {
+          "apikey": "={{$vars.SUPABASE_SERVICE_ROLE_KEY}}",
+          "Authorization": "Bearer {{$vars.SUPABASE_SERVICE_ROLE_KEY}}",
+          "Content-Type": "application/json"
+        },
+        "body": "={\n  \"lead_id\": \"{{$('Webhook Trigger').item.json.body.lead_id}}\",\n  \"user_id\": \"{{$('Webhook Trigger').item.json.body.user_id}}\",\n  \"action\": \"pipeline_update\",\n  \"details\": \"Stage changed to {{$('Webhook Trigger').item.json.body.new_stage}}\"\n}"
+      }
+    },
+    {
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [850, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"new_stage\": \"{{$('Webhook Trigger').item.json.body.new_stage}}\",\n  \"message\": \"Pipeline updated\"\n}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": { "main": [[ { "node": "Update Lead Status" } ]] },
+    "Update Lead Status": { "main": [[ { "node": "Log Activity" } ]] },
+    "Log Activity": { "main": [[ { "node": "Respond to Webhook" } ]] }
+  }
+}

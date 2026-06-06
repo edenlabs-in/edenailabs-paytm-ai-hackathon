@@ -1,0 +1,22 @@
+services:
+  backend:
+    build: .
+    container_name: seriouspreneur-backend
+    env_file: .env
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    # Hot-reload for local dev; remove the volume + use the image CMD in prod.
+    volumes:
+      - ./app:/srv/app
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  # Background cron jobs (analytics, daily plan, greetings, lead retrain, reddit mining).
+  worker:
+    build: .
+    container_name: seriouspreneur-worker
+    env_file: .env
+    restart: unless-stopped
+    depends_on:
+      - backend
+    command: ["python", "-m", "app.workers.scheduler"]

@@ -1,0 +1,71 @@
+{
+  "name": "WF-07: WhatsApp Campaign",
+  "nodes": [
+    {
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "send-whatsapp",
+        "responseMode": "responseNode"
+      }
+    },
+    {
+      "name": "Get Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [450, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "={{$vars.SUPABASE_URL}}/rest/v1/leads?id=eq.{{$json.body.lead_id}}&select=*",
+        "headers": {
+          "apikey": "={{$vars.SUPABASE_SERVICE_ROLE_KEY}}",
+          "Authorization": "Bearer {{$vars.SUPABASE_SERVICE_ROLE_KEY}}"
+        }
+      }
+    },
+    {
+      "name": "Prepare WA Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300],
+      "parameters": {
+        "jsCode": "const lead = $input.first().json[0] || $input.first().json;\nconst body = $('Webhook Trigger').first().json.body;\n\nlet message = body.custom_message || 'Hi ' + (lead.business_name || 'there') + '! 👋\\n\\nI help local businesses build a professional online presence. Did you know 9 out of 10 customers search online before visiting? A great website can bring you more walk-ins.\\n\\nI\\'d love to show you a quick demo. When would be a good time? 🙂';\n\nmessage = message\n  .replace(/{bo_name}/g, lead.business_name || 'there')\n  .replace(/{business_name}/g, lead.business_name || '')\n  .replace(/{category}/g, lead.category || 'business')\n  .replace(/{city}/g, lead.city || '')\n  .replace(/{google_rating}/g, String(lead.google_rating || ''));\n\nreturn [{ json: { phone: lead.phone, message, lead_id: body.lead_id, user_id: body.user_id } }];"
+      }
+    },
+    {
+      "name": "Log Outreach",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [850, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{$vars.SUPABASE_URL}}/rest/v1/outreach",
+        "headers": {
+          "apikey": "={{$vars.SUPABASE_SERVICE_ROLE_KEY}}",
+          "Authorization": "Bearer {{$vars.SUPABASE_SERVICE_ROLE_KEY}}",
+          "Content-Type": "application/json"
+        },
+        "body": "={\n  \"lead_id\": \"{{$json.lead_id}}\",\n  \"user_id\": \"{{$json.user_id}}\",\n  \"channel\": \"whatsapp\",\n  \"content\": {{JSON.stringify($json.message)}},\n  \"sent\": true,\n  \"response_status\": \"sent\"\n}"
+      }
+    },
+    {
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1050, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"channel\": \"whatsapp\",\n  \"message\": \"WhatsApp message logged\"\n}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": { "main": [[ { "node": "Get Lead" } ]] },
+    "Get Lead": { "main": [[ { "node": "Prepare WA Message" } ]] },
+    "Prepare WA Message": { "main": [[ { "node": "Log Outreach" } ]] },
+    "Log Outreach": { "main": [[ { "node": "Respond to Webhook" } ]] }
+  }
+}

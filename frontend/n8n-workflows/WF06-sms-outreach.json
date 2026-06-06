@@ -1,0 +1,71 @@
+{
+  "name": "WF-06: SMS Outreach",
+  "nodes": [
+    {
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "send-sms",
+        "responseMode": "responseNode"
+      }
+    },
+    {
+      "name": "Get Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [450, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "={{$vars.SUPABASE_URL}}/rest/v1/leads?id=eq.{{$json.body.lead_id}}&select=*",
+        "headers": {
+          "apikey": "={{$vars.SUPABASE_SERVICE_ROLE_KEY}}",
+          "Authorization": "Bearer {{$vars.SUPABASE_SERVICE_ROLE_KEY}}"
+        }
+      }
+    },
+    {
+      "name": "Prepare Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300],
+      "parameters": {
+        "jsCode": "const lead = $input.first().json[0] || $input.first().json;\nconst body = $('Webhook Trigger').first().json.body;\n\nlet message = body.custom_message || 'Hi! We help businesses like ' + lead.business_name + ' get found online. Free website demo? Reply YES. -Seriousprenuer';\n\n// Replace template variables\nmessage = message\n  .replace(/{business_name}/g, lead.business_name || '')\n  .replace(/{bo_name}/g, lead.business_name || 'there')\n  .replace(/{category}/g, lead.category || 'business')\n  .replace(/{city}/g, lead.city || '')\n  .replace(/{user_name}/g, 'Seriousprenuer');\n\nconst charCount = message.length;\nlet smsType = 'short';\nif (charCount <= 160) smsType = 'short';\nelse if (charCount <= 306) smsType = 'medium';\nelse if (charCount <= 459) smsType = 'long';\nelse { message = message.substring(0, 459); smsType = 'truncated'; }\n\nreturn [{ json: { phone: lead.phone, message, charCount, smsType, lead_id: body.lead_id, user_id: body.user_id } }];"
+      }
+    },
+    {
+      "name": "Log Outreach",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [850, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{$vars.SUPABASE_URL}}/rest/v1/outreach",
+        "headers": {
+          "apikey": "={{$vars.SUPABASE_SERVICE_ROLE_KEY}}",
+          "Authorization": "Bearer {{$vars.SUPABASE_SERVICE_ROLE_KEY}}",
+          "Content-Type": "application/json"
+        },
+        "body": "={\n  \"lead_id\": \"{{$json.lead_id}}\",\n  \"user_id\": \"{{$json.user_id}}\",\n  \"channel\": \"sms\",\n  \"content\": {{JSON.stringify($json.message)}},\n  \"sent\": true,\n  \"response_status\": \"sent\"\n}"
+      }
+    },
+    {
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1050, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"message_length\": {{$('Prepare Message').item.json.charCount}},\n  \"sms_type\": \"{{$('Prepare Message').item.json.smsType}}\"\n}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": { "main": [[ { "node": "Get Lead" } ]] },
+    "Get Lead": { "main": [[ { "node": "Prepare Message" } ]] },
+    "Prepare Message": { "main": [[ { "node": "Log Outreach" } ]] },
+    "Log Outreach": { "main": [[ { "node": "Respond to Webhook" } ]] }
+  }
+}

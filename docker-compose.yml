@@ -1,0 +1,40 @@
+# Full-stack PAYTM Merchant-KYC app — frontend + backend API + background worker.
+#
+#   docker compose up --build
+#
+# Requires a repo-root .env (copy backend/.env.example and fill keys). Compose reads it for both
+# the backend's runtime env and the frontend's build-time VITE_* values.
+#   Frontend → http://localhost:8080   ·   Backend API → http://localhost:8000
+
+services:
+  backend:
+    build: ./backend
+    container_name: paytm-backend
+    env_file: .env
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  worker:
+    build: ./backend
+    container_name: paytm-worker
+    env_file: .env
+    command: ["python", "-m", "app.workers.scheduler"]
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY}
+        # Empty → the SPA calls same-origin /webhook/*, which nginx proxies to the backend.
+        VITE_N8N_WEBHOOK_URL: ""
+    container_name: paytm-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
