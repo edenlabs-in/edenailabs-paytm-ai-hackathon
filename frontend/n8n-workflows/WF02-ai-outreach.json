@@ -1,0 +1,110 @@
+{
+  "name": "WF-02: AI Outreach Generator",
+  "nodes": [
+    {
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-outreach",
+        "responseMode": "responseNode"
+      }
+    },
+    {
+      "name": "Get Lead Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [450, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "={{$vars.SUPABASE_URL}}/rest/v1/leads?id=eq.{{$json.body.lead_id}}&select=*",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "apikey", "value": "={{$vars.SUPABASE_SERVICE_ROLE_KEY}}"},
+            {"name": "Authorization", "value": "=Bearer {{$vars.SUPABASE_SERVICE_ROLE_KEY}}"}
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "name": "Build Gemini Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300],
+      "parameters": {
+        "jsCode": "const leadArr = $input.first().json;\nconst lead = Array.isArray(leadArr) ? leadArr[0] : leadArr;\nconst body = $('Webhook Trigger').first().json.body;\nconst channel = body.channel || 'whatsapp';\nconst language = body.language || 'english';\n\nconst prompt = `You are an expert business development copywriter. Generate EXACTLY 3 different ${channel.toUpperCase()} outreach messages to pitch website creation services to: ${lead.business_name} (${lead.category || 'business'}) in ${lead.city || 'India'}. Rating: ${lead.google_rating || 'N/A'}. No website currently. Language: ${language}. Each variant should use a different angle: social proof, loss aversion, opportunity. Respond in JSON: {\"scripts\": [{\"variant\": 1, \"angle\": \"...\", \"content\": \"...\"}]}`;\n\nreturn [{ json: { prompt, lead, channel, language } }];"
+      }
+    },
+    {
+      "name": "Google Gemini API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [850, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={{$vars.GOOGLE_API_KEY}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Content-Type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "jsonBody": "={\n  \"contents\": [{\"parts\": [{\"text\": \"{{$json.prompt}}\"}]}],\n  \"generationConfig\": {\"temperature\": 0.8, \"maxOutputTokens\": 1024, \"responseMimeType\": \"application/json\"}\n}",
+        "options": {}
+      }
+    },
+    {
+      "name": "Parse and Save Scripts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 300],
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst body = $('Webhook Trigger').first().json.body;\nconst prevData = $('Build Gemini Prompt').first().json;\n\nlet scripts;\ntry {\n  const text = response.candidates[0].content.parts[0].text;\n  scripts = JSON.parse(text).scripts;\n} catch (e) {\n  scripts = [{variant: 1, angle: 'general', content: 'Error generating script. Please try again.'}];\n}\n\nconst records = scripts.map(s => ({\n  lead_id: body.lead_id,\n  user_id: body.user_id,\n  channel: prevData.channel,\n  content: s.content,\n  language: prevData.language,\n  variant: s.variant,\n  sent: false,\n  response_status: 'pending'\n}));\n\nreturn [{ json: { records, scripts } }];"
+      }
+    },
+    {
+      "name": "Insert Outreach Records",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1250, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{$vars.SUPABASE_URL}}/rest/v1/outreach",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "apikey", "value": "={{$vars.SUPABASE_SERVICE_ROLE_KEY}}"},
+            {"name": "Authorization", "value": "=Bearer {{$vars.SUPABASE_SERVICE_ROLE_KEY}}"},
+            {"name": "Content-Type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "jsonBody": "={{JSON.stringify($json.records)}}",
+        "options": {}
+      }
+    },
+    {
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1450, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"scripts\": {{JSON.stringify($('Parse and Save Scripts').item.json.scripts)}}\n}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {"main": [[{"node": "Get Lead Details"}]]},
+    "Get Lead Details": {"main": [[{"node": "Build Gemini Prompt"}]]},
+    "Build Gemini Prompt": {"main": [[{"node": "Google Gemini API"}]]},
+    "Google Gemini API": {"main": [[{"node": "Parse and Save Scripts"}]]},
+    "Parse and Save Scripts": {"main": [[{"node": "Insert Outreach Records"}]]},
+    "Insert Outreach Records": {"main": [[{"node": "Respond to Webhook"}]]}
+  }
+}

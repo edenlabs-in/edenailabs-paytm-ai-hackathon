@@ -1,0 +1,35 @@
+# ── Core runtime (Phase 1–2) ──
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+pydantic-settings==2.6.1
+httpx==0.28.1
+PyJWT==2.10.1
+python-dotenv==1.0.1
+
+# ── LLM gateway (OpenRouter via OpenAI-compatible SDK) ──
+openai>=1.58,<2
+
+# ── Phase 3: RAG (lightweight ONNX embeddings, no torch) ──
+fastembed>=0.4.2
+
+# ── Phase 4: agent orchestration ──
+langgraph>=0.2.60
+langchain-core>=0.3.29
+langchain-openai>=0.2.14
+
+# ── Tests ──
+pytest==8.3.4
+pytest-asyncio==0.25.0
+respx==0.22.0
+
+# ── Phase 5: learned lead scoring + next-best-action ──
+scikit-learn>=1.5
+joblib>=1.4
+
+# ── Phase 6: scheduled workers + Reddit pain-point mining ──
+APScheduler>=3.10
+praw>=7.8
+
+# ── Later phases — uncomment as each lands ──
+# (lightgbm/hdbscan optional upgrades; sklearn GradientBoosting + KMeans used by default)

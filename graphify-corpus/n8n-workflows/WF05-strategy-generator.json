@@ -1,0 +1,102 @@
+{
+  "name": "WF-05: AI Strategy Generator",
+  "nodes": [
+    {
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-strategy",
+        "responseMode": "responseNode"
+      }
+    },
+    {
+      "name": "Get Lead Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [450, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "={{$vars.SUPABASE_URL}}/rest/v1/leads?id=eq.{{$json.body.lead_id}}&select=*",
+        "headers": {
+          "apikey": "={{$vars.SUPABASE_SERVICE_ROLE_KEY}}",
+          "Authorization": "Bearer {{$vars.SUPABASE_SERVICE_ROLE_KEY}}"
+        }
+      }
+    },
+    {
+      "name": "Build Strategy Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300],
+      "parameters": {
+        "jsCode": "const lead = $input.first().json[0] || $input.first().json;\n\nconst prompt = `You are an experienced business development strategist for digital services in India.\n\nCreate a detailed approach strategy for pitching website/digital services to:\n- Business: ${lead.business_name}\n- Category: ${lead.category || 'local business'}\n- Location: ${lead.address || ''}, ${lead.city || ''}\n- Google Rating: ${lead.google_rating || 'Not rated'}\n- Has Website: No\n- Phone: ${lead.phone || 'N/A'}\n\nGenerate a comprehensive strategy in this exact JSON format:\n{\n  \"executive_summary\": \"2-3 sentences on why this business needs a website\",\n  \"pitch_angle\": \"The specific persuasion angle to use\",\n  \"competitor_insight\": \"What similar businesses are doing online\",\n  \"service_package\": {\n    \"recommended_services\": [\"website\", \"google_maps_optimization\"],\n    \"starter_price\": \"₹4,999\",\n    \"growth_price\": \"₹9,999\",\n    \"timeline\": \"5 days\"\n  },\n  \"outreach_plan\": {\n    \"best_channel\": \"whatsapp\",\n    \"best_time\": \"2-4 PM weekdays\",\n    \"opening_line\": \"The exact first sentence to say\",\n    \"key_talking_points\": [\"point1\", \"point2\", \"point3\"]\n  },\n  \"objections_and_handlers\": [\n    { \"objection\": \"I don't need a website\", \"response\": \"...\" },\n    { \"objection\": \"It's too expensive\", \"response\": \"...\" }\n  ],\n  \"revenue_estimate\": {\n    \"initial_deal\": \"₹X,XXX\",\n    \"recurring_monthly\": \"₹X,XXX\"\n  },\n  \"difficulty_score\": 3,\n  \"next_best_action\": \"The single most impactful thing to do first\"\n}\n\nBe specific to Indian market with INR pricing.`;\n\nreturn [{ json: { prompt, lead } }];"
+      }
+    },
+    {
+      "name": "Google Gemini API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [850, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={{$vars.GOOGLE_API_KEY}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "jsonBody": "={\n  \"contents\": [{\"parts\": [{\"text\": \"{{$json.prompt}}\"}]}],\n  \"generationConfig\": {\"temperature\": 0.7, \"topP\": 0.9, \"maxOutputTokens\": 2048, \"responseMimeType\": \"application/json\"}\n}",
+        "options": {}
+      }
+    },
+    {
+      "name": "Parse and Save Strategy",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 300],
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst triggerData = $('Webhook Trigger').first().json.body;\n\nlet strategy;\ntry {\n  const text = response.candidates[0].content.parts[0].text;\n  strategy = JSON.parse(text);\n} catch (e) {\n  strategy = { executive_summary: 'Failed to generate strategy. Please try again.', difficulty_score: 3 };\n}\n\nreturn [{\n  json: {\n    lead_id: triggerData.lead_id,\n    user_id: triggerData.user_id,\n    content_json: JSON.stringify(strategy),\n    executive_summary: strategy.executive_summary || '',\n    pitch_angle: strategy.pitch_angle || '',\n    recommended_services: strategy.service_package?.recommended_services || [],\n    pricing_suggestion: strategy.service_package?.starter_price || '',\n    difficulty_score: strategy.difficulty_score || 3,\n    status: 'draft'\n  }\n}];"
+      }
+    },
+    {
+      "name": "Insert Strategy",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1250, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{$vars.SUPABASE_URL}}/rest/v1/strategies",
+        "headers": {
+          "apikey": "={{$vars.SUPABASE_SERVICE_ROLE_KEY}}",
+          "Authorization": "Bearer {{$vars.SUPABASE_SERVICE_ROLE_KEY}}",
+          "Content-Type": "application/json",
+          "Prefer": "return=representation"
+        },
+        "body": "={{JSON.stringify($json)}}"
+      }
+    },
+    {
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1450, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"message\": \"Strategy generated\"\n}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": { "main": [[ { "node": "Get Lead Details" } ]] },
+    "Get Lead Details": { "main": [[ { "node": "Build Strategy Prompt" } ]] },
+    "Build Strategy Prompt": { "main": [[ { "node": "Google Gemini API" } ]] },
+    "Google Gemini API": { "main": [[ { "node": "Parse and Save Strategy" } ]] },
+    "Parse and Save Strategy": { "main": [[ { "node": "Insert Strategy" } ]] },
+    "Insert Strategy": { "main": [[ { "node": "Respond to Webhook" } ]] }
+  }
+}

@@ -1,0 +1,223 @@
+{
+  "name": "WF-01: Lead Discovery FINAL",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "discover-leads",
+        "options": {},
+        "httpMethod": "POST",
+        "responseMode": "responseNode"
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "name": "Webhook Trigger",
+      "webhookId": "4cd2d181-7e2c-47f3-bffb-660e8a796404"
+    },
+    {
+      "name": "Geocode PIN",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        450,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://nominatim.openstreetmap.org/search?q={{ $json.body.pin_code }}+India&format=json&limit=1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Seriousprenuer/1.0"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "name": "Prepare Search",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        650,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const geo = $input.first().json;\nconst g = Array.isArray(geo) ? geo[0] : geo;\nconst body = $('Webhook Trigger').first().json.body;\nconst lat = g && g.lat ? parseFloat(g.lat) : 19.076;\nconst lng = g && g.lon ? parseFloat(g.lon) : 72.877;\nconst biz = body.business_type || 'restaurant';\nconst r = (body.radius_km || 5) * 1000;\nreturn [{ json: { lat, lng, biz, r, body } }];"
+      }
+    },
+    {
+      "name": "Google Places",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        850,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://places.googleapis.com/v1/places:searchNearby",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Goog-Api-Key",
+              "value": "={{ $vars.GOOGLE_API_KEY }}"
+            },
+            {
+              "name": "X-Goog-FieldMask",
+              "value": "places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.googleMapsUri,places.rating,places.types,places.websiteUri,places.id"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"includedTypes\": [\"{{ $json.biz }}\"],\n  \"maxResultCount\": 20,\n  \"locationRestriction\": {\n    \"circle\": {\n      \"center\": {\"latitude\": {{ $json.lat }}, \"longitude\": {{ $json.lng }}},\n      \"radius\": {{ $json.r }}\n    }\n  }\n}",
+        "options": {}
+      }
+    },
+    {
+      "name": "Format Leads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1050,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const res = $input.first().json;\nconst places = res.places || [];\nconst body = $('Webhook Trigger').first().json.body;\nconst leads = places.filter(p => !p.websiteUri).map(p => ({\n  business_name: p.displayName && p.displayName.text ? p.displayName.text : 'Unknown',\n  category: (p.types && p.types[0]) || 'general',\n  address: p.formattedAddress || '',\n  phone: p.nationalPhoneNumber || '',\n  google_rating: p.rating || null,\n  google_place_id: p.id || '',\n  google_maps_url: p.googleMapsUri || '',\n  has_website: false,\n  priority: 5,\n  source: 'google_places',\n  user_id: body.user_id,\n  pin_code: body.pin_code || '',\n  status: 'new'\n}));\nreturn [{ json: { leads, count: leads.length } }];"
+      }
+    },
+    {
+      "name": "Save to DB",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1250,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.SUPABASE_URL }}/rest/v1/leads",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $vars.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $vars.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.leads) }}",
+        "options": {}
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"success\":true,\"leads_count\":{{ $(\"Format Leads\").item.json.count }},\"message\":\"Leads discovered and saved\"}"
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1450,
+        300
+      ],
+      "name": "Respond to Webhook"
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Geocode PIN",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Geocode PIN": {
+      "main": [
+        [
+          {
+            "node": "Prepare Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Search": {
+      "main": [
+        [
+          {
+            "node": "Google Places",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Places": {
+      "main": [
+        [
+          {
+            "node": "Format Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Leads": {
+      "main": [
+        [
+          {
+            "node": "Save to DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to DB": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

@@ -1,0 +1,186 @@
+===========================================================================
+        SERIOUSPRENUER — PAID API RECOMMENDATIONS v2.0
+        Updated for 11-Feature Architecture
+===========================================================================
+
+Created: 2026-03-27
+Status: MVP using all FREE APIs. Upgrade per feature priority.
+
+===========================================================================
+PHASE 1 MVP — FREE APIS IN USE
+===========================================================================
+
+1. SUPABASE (Auth + Database + Storage + Realtime)
+   FREE:  500MB DB, 1GB storage, 50K auth users, unlimited API calls
+   PAID:  Pro @ $25/mo — 8GB DB, 100GB storage, daily backups
+   WHEN:  When DB exceeds 500MB (~500-1000 active users)
+
+2. GOOGLE PLACES API (New) — Lead Discovery
+   FREE:  $200/month credit (~5,000 Nearby Search requests)
+   PAID:  $17/1,000 Basic requests, $32/1,000 Advanced
+   WHEN:  When monthly searches exceed 5,000
+
+3. GOOGLE GEOCODING API — PIN Code Resolution
+   FREE:  $200/month credit (~40,000 geocoding requests)
+   PAID:  $5/1,000 requests beyond free tier
+   WHEN:  Very unlikely to exceed free tier
+
+4. GOOGLE CUSTOM SEARCH API — Website Verification
+   FREE:  100 searches/day (3,000/month)
+   PAID:  $5/1,000 queries beyond free tier
+   WHEN:  When daily verification exceeds 100 businesses
+
+5. GOOGLE GEMINI 1.5 FLASH — AI Strategy + Outreach + Content
+   FREE:  15 RPM, 1M input tokens/min, 1.5B tokens/day
+   PAID:  Gemini 1.5 Pro @ $3.50/$10.50 per 1M tokens
+   WHEN:  When free tier rate limits are hit consistently
+   ALT:   OpenAI GPT-4o-mini ($0.15/$0.60 per 1M tokens)
+
+6. ELEVENLABS — Onboarding Voiceover (9 shorts)
+   FREE:  ~10 min/month, basic voices
+   PAID:  Starter @ $5/mo (30 min), Creator @ $11/mo (100 min)
+   GRANT: Startup grant: 12 months free, 33M characters
+   WHEN:  After MVP onboarding videos are finalized
+   NOTE:  Apply for ElevenLabs Startup Grant for free 12 months
+
+7. ORA.AI — In-App Chatbot ("Sid")
+   FREE:  1-click chatbot creation, embed via script tag
+   PAID:  Premium plans available
+   WHEN:  When chatbot needs custom training data
+   ALT:   Gemini-powered FAQ bot via Supabase Edge Functions (free)
+
+8. n8n.io — Workflow Automation
+   FREE:  Cloud: 5 workflows, 2,500 executions/month
+   PAID:  Pro @ €24/mo (unlimited workflows, 10K executions)
+   SELF:  Self-host on Railway/Render (~$7/mo, unlimited)
+   WHEN:  When workflows exceed 5 or executions exceed 2,500/mo
+   NOTE:  Self-hosting recommended for Phase 2
+
+===========================================================================
+PHASE 1 MVP — SMS/WHATSAPP APIS (Trial/Free)
+===========================================================================
+
+9. MSG91 — SMS + WhatsApp (PRIMARY BSP)
+   FREE:  Trial credits for testing
+   SMS:   ₹0.12-0.20/message (India)
+   WA:    Marketing ₹0.86-1.09/msg, Utility ₹0.145, Service: FREE
+   SETUP: Sign up → DLT registration → Template approval
+   WHEN:  Immediately for outreach testing
+   URL:   https://msg91.com
+
+10. GALLABOX — WhatsApp Business (ALTERNATIVE BSP)
+    FREE:  7-day free trial with message credits
+    PAID:  Growth @ $89/mo (6 users, chatbot builder)
+    WHEN:  If MSG91 WhatsApp integration has issues
+    URL:   https://gallabox.com
+
+11. KAPSYSTEM — SMS (BACKUP)
+    FREE:  Trial credits
+    SMS:   ₹0.15-0.25/message
+    WHEN:  If MSG91 has delivery issues in specific regions
+    URL:   https://kapsystem.com
+
+12. TWILIO — SMS + WhatsApp (INTERNATIONAL)
+    FREE:  $15 trial credit
+    SMS:   ₹0.04-0.08/message (India)
+    WA:    $0.005/msg + carrier fees
+    WHEN:  If international expansion needed
+    NOTE:  Better API docs but more expensive for India
+
+13. SSD WEB SOLUTIONS — SMS
+    STATUS: Limited documentation, contact for pricing
+    VERDICT: Skip for MVP, evaluate later
+
+===========================================================================
+WHATSAPP BUSINESS API SETUP CHECKLIST
+===========================================================================
+
+□ Step 1: Sign up with BSP (MSG91 recommended for India)
+  URL: https://msg91.com/whatsapp
+
+□ Step 2: Meta Business Verification
+  - Go to business.facebook.com
+  - Verify business with GSTIN (you have MSME registration)
+  - Link WhatsApp Business Account
+
+□ Step 3: Create Pre-approved Templates
+  - Submit 10 WhatsApp message templates to Meta
+  - Categories: Marketing, Utility
+  - Wait 24-48 hours for approval
+  - Templates must follow Meta's guidelines
+
+□ Step 4: Upload CSV Contacts
+  - Export leads from Supabase as CSV
+  - Format: name, phone_with_country_code
+  - Upload to BSP dashboard
+
+□ Step 5: Send Campaigns
+  - Trigger via n8n WF-07 workflow
+  - Or send directly from BSP dashboard
+
+===========================================================================
+PHASE 2 ADDITIONS
+===========================================================================
+
+14. META GRAPH API — Social Media Manager (IG/FB)
+    FREE:  Full API access for posting, reading insights
+    SETUP: Create Meta App → Get IG Business Account token
+    NOTE:  Requires Facebook Page linked to IG Business account
+
+15. LINKEDIN MARKETING API — Social Media Manager
+    FREE:  Posting and basic analytics
+    SETUP: Create LinkedIn App → Request marketing API access
+    NOTE:  LinkedIn API approval takes 3-5 business days
+
+16. CANVA API — Greeting Card Templates
+    FREE:  Canva Connect API (free tier)
+    PAID:  $13/mo for Pro (premium templates)
+    ALT:   Use Tailwind CSS + HTML-to-image for card generation (FREE)
+
+===========================================================================
+PHASE 3 ADDITIONS
+===========================================================================
+
+17. GUSHWORK.AI — Agentic SEO Reference
+    MODEL: AI-Assisted SEO service, $2M+ ARR
+    CO-FOUNDER: Nayrhit B (IIT, ex-Chiratae Ventures, backed by Lightspeed)
+    INSIGHT: Building for AI-first search (ChatGPT, Perplexity as search engines)
+    LINKEDIN: https://www.linkedin.com/in/nayrhit
+    USE: Reference their model for SEO module design
+
+18. MANUS.IM — AI Agent Platform (Strategy Generation)
+    FREE:  API available, task-based pricing
+    USE:   Autonomous research, competitor analysis, strategy generation
+    WHEN:  Phase 3 — when Gemini free tier is insufficient
+    URL:   https://manus.im, API: https://open.manus.im/docs
+
+19. RAZORPAY — Payment Gateway (Subscriptions)
+    FREE:  No setup fee, 2% transaction fee
+    USE:   Daily Action Plan subscriptions, SEO credits
+    WHEN:  Phase 3 — when monetization features launch
+    URL:   https://razorpay.com
+
+===========================================================================
+TOTAL COSTS BY PHASE
+===========================================================================
+
+PHASE 1 (MVP):      $0/month (all free tiers + trial credits)
+PHASE 2 (Growth):   ~$50-100/month
+  - n8n self-host: $7/mo
+  - Supabase Pro: $25/mo
+  - MSG91 WhatsApp: ~₹500-2000/mo (usage-based)
+PHASE 3 (Scale):    ~$150-300/month
+  - Above + Google API overage
+  - Razorpay transaction fees (2%)
+  - Optional: ElevenLabs, Manus API
+
+===========================================================================
+PRIORITY UPGRADE ORDER (when free tiers run out)
+===========================================================================
+1. n8n self-host ($7/mo) — first bottleneck
+2. Supabase Pro ($25/mo) — when DB fills
+3. MSG91 WhatsApp paid — when trial credits deplete
+4. Google Places paid — when $200 credit exhausted
+5. ElevenLabs Startup Grant — apply immediately (free 12 months)
+6. Vercel Pro ($20/mo) — when client sites scale
+7. Razorpay — when payments launch
