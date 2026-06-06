@@ -7,7 +7,7 @@ credit lines, insurance, a 0%-EMI in-ecosystem marketplace) where **the discount
 to the merchant instead of spent on ads.
 
 > Built for the Paytm AI Hackathon. The backend is a from-scratch **agentic Python service** that
-> the frontend is a React/Vite SPA.
+> replaces a legacy n8n workflow stack; the frontend is a React/Vite SPA.
 
 ---
 
